@@ -9,7 +9,7 @@ class AgentResult(TypedDict):
     metadata: Dict[str, Any]
 
 
-class ClaimState(TypedDict):
+class ClaimState(TypedDict, total=False):
     user_id: str
     user_email: str
     is_authenticated: bool
@@ -30,3 +30,6 @@ class ClaimState(TypedDict):
 
     chat_history: List[Dict[str, str]]
     email_sent: bool
+
+    # Optional path to an uploaded identity document image used by the identity agent
+    identity_image_path: Optional[str]

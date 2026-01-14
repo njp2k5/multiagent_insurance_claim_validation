@@ -19,3 +19,8 @@ langgraph
 langchain
 
 
+opencv-python
+pytesseract
+pillow
+numpy
+
