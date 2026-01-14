@@ -1,21 +1,101 @@
+from typing import Optional, Dict, Any, cast
+from datetime import date
+
 from state import ClaimState, AgentResult
+from db.session import SessionLocal
+from models.policy import Policy
+from policy.eligibility import evaluate_policy
 
 def policy_agent(state: ClaimState) -> ClaimState:
-    claim_form = state.get("claim_form")
-    if not claim_form:
-        amount = 0
-    else:
-        amount = claim_form.get("amount", 0)
-    eligible = amount <= 500000
+    db = SessionLocal()
+
+    # Resolve Aadhaar number from state (preferred) or from identity_result metadata
+    aadhaar_no: Optional[str] = state.get("aadhaar_number")
+    if not aadhaar_no:
+        identity_result = state.get("identity_result") or {}
+        metadata: Dict[str, Any] = identity_result.get("metadata", {}) if isinstance(identity_result, dict) else {}
+        numbers = metadata.get("aadhaar_numbers") or []
+        aadhaar_no = numbers[0] if numbers else None
+
+    if not aadhaar_no:
+        result: AgentResult = {
+            "agent_name": "PolicyAgent",
+            "status": "FAIL",
+            "confidence": 0.3,
+            "message": "Aadhaar number missing; cannot evaluate policy",
+            "metadata": {"aadhaar_number": None}
+        }
+        state["policy_result"] = result
+        agent_results = state.setdefault("agent_results", [])
+        agent_results.append(result)
+        return state
+
+    claim = state.get("claim_form") or {}
+    event = claim.get("event")
+    amount_claimed = claim.get("amount_claimed")
+    if event is None or amount_claimed is None:
+        result: AgentResult = {
+            "agent_name": "PolicyAgent",
+            "status": "FAIL",
+            "confidence": 0.3,
+            "message": "Claim details incomplete; cannot evaluate policy",
+            "metadata": {
+                "aadhaar_number": aadhaar_no,
+                "event": event,
+                "amount_claimed": amount_claimed
+            }
+        }
+        state["policy_result"] = result
+        agent_results = state.setdefault("agent_results", [])
+        agent_results.append(result)
+        return state
+
+    policy: Optional[Policy] = (
+        db.query(Policy)
+        .filter(Policy.aadhaar_no == aadhaar_no)
+        .first()
+    )
+
+    if not policy:
+        result: AgentResult = {
+            "agent_name": "PolicyAgent",
+            "status": "FAIL",
+            "confidence": 0.3,
+            "message": "No policy found for Aadhaar",
+            "metadata": {
+                "aadhaar_number": aadhaar_no,
+                "current_plan": None
+            }
+        }
+        state["policy_result"] = result
+        agent_results = state.setdefault("agent_results", [])
+        agent_results.append(result)
+        return state
+
+    plan_code = str(policy.policy_name)
+    policy_expiry = cast(date, policy.policy_expiry)
+
+    eligible, message = evaluate_policy(
+        plan_code=plan_code,
+        policy_expiry=policy_expiry,
+        event=event,
+        amount_claimed=amount_claimed
+    )
 
     result: AgentResult = {
         "agent_name": "PolicyAgent",
         "status": "PASS" if eligible else "FAIL",
         "confidence": 0.85 if eligible else 0.3,
-        "message": "Policy eligible" if eligible else "Policy limit exceeded",
-        "metadata": {"amount": amount}
+        "message": message,
+        "metadata": {
+            "aadhaar_number": aadhaar_no,
+            "current_plan": plan_code,
+            "event": event,
+            "amount_claimed": amount_claimed
+        }
     }
 
     state["policy_result"] = result
-    state["agent_results"].append(result)
+    agent_results = state.setdefault("agent_results", [])
+    agent_results.append(result)
     return state

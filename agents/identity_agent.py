@@ -15,6 +15,10 @@ def identity_verification_agent(state: ClaimState) -> ClaimState:
     status = "PASS" if verified_numbers else "FAIL"
     confidence = 0.95 if verified_numbers else 0.3
 
+    # Store the first verified Aadhaar number as the primary one
+    primary_aadhaar = verified_numbers[0] if verified_numbers else None
+    state["aadhaar_number"] = primary_aadhaar
+
     result: AgentResult = {
         "agent_name": "IdentityVerificationAgent",
         "status": status,

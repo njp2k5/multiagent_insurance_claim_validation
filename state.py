@@ -33,3 +33,5 @@ class ClaimState(TypedDict, total=False):
 
     # Optional path to an uploaded identity document image used by the identity agent
     identity_image_path: Optional[str]
+    # Verified Aadhaar number from identity verification
+    aadhaar_number: Optional[str]
