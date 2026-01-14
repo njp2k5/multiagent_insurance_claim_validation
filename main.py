@@ -1,13 +1,13 @@
 from fastapi import FastAPI
-print("imported contents for main")
 from api.routes import auth, health
-print("imported routes")
 from db.base import Base
-print("imported base")
 from db.session import engine
-print("imported engine")
 from models.user import User
-print("imported user model")
+from api.routes.claims import router as claims_router
+from api.routes.chat import router as chat_router
+from api.routes.agents import router as agents_router
+
+
 
 
 
@@ -24,6 +24,9 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(auth.router)
+    app.include_router(agents_router)
+    app.include_router(claims_router)
+    app.include_router(chat_router)
 
     return app
 
