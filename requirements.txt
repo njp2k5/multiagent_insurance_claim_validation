@@ -17,10 +17,16 @@ bcrypt==3.2.2
 
 langgraph 
 langchain
-
+langchain-community
 
 opencv-python
 pytesseract
 pillow
 numpy
+pdf2image
+
+
+requests
+faiss-cpu
+
 

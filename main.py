@@ -8,6 +8,7 @@ from api.routes.chat import router as chat_router
 from api.routes.agents import router as agents_router
 from api.routes.identity import router as identity_router
 from api.routes.policy import router as policy_router
+from api.routes.documents import router as documents_router
 
 
 
@@ -32,7 +33,7 @@ def create_app() -> FastAPI:
     app.include_router(chat_router)
     app.include_router(identity_router)
     app.include_router(policy_router)
-
+    app.include_router(documents_router)
     return app
 
 

@@ -16,10 +16,8 @@ class ClaimState(TypedDict, total=False):
 
     claim_id: Optional[str]
     claim_form: Optional[Dict[str, Any]]
-    documents: Optional[List[str]]
 
     identity_result: Optional[AgentResult]
-    document_result: Optional[AgentResult]
     policy_result: Optional[AgentResult]
     fraud_result: Optional[AgentResult]
 
@@ -35,3 +33,8 @@ class ClaimState(TypedDict, total=False):
     identity_image_path: Optional[str]
     # Verified Aadhaar number from identity verification
     aadhaar_number: Optional[str]
+
+    document_image_paths: list[str]
+    document_summary: Optional[str]
+    document_validation_score: Optional[float]
+    document_result: Optional[AgentResult]
