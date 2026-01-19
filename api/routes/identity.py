@@ -22,5 +22,7 @@ async def extract_aadhaar(file: UploadFile = File(...)):
 
     return {
         "aadhaar_numbers": result["aadhaar_numbers"],
-        "verified": result["verified"]
+        "verified": result["verified"],
+        "aadhaar_name": result.get("aadhaar_name"),
+        "aadhaar_age": result.get("aadhaar_age")
     }

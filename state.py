@@ -33,8 +33,13 @@ class ClaimState(TypedDict, total=False):
     identity_image_path: Optional[str]
     # Verified Aadhaar number from identity verification
     aadhaar_number: Optional[str]
+    # Extracted Aadhaar holder name
+    aadhaar_name: Optional[str]
+    # Extracted Aadhaar holder age
+    aadhaar_age: Optional[int]
 
     document_image_paths: list[str]
+    document_name: Optional[str]
+    document_age: Optional[int]
     document_summary: Optional[str]
-    document_validation_score: Optional[float]
     document_result: Optional[AgentResult]

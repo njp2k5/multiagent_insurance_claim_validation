@@ -3,6 +3,7 @@ import os, uuid, shutil
 
 from agents.document_agent import document_validation_agent
 from documents.pdf_utils import pdf_to_images
+from documents.ocr import extract_text_from_image, extract_patient_name_and_age
 from state import ClaimState
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
@@ -49,6 +50,35 @@ async def upload_and_validate(
 
     return {
         "summary": result["metadata"]["summary"],
-        "validation_score": result["metadata"]["validation_score"],
         "agent_status": result["status"]
+    }
+
+
+@router.post("/extract-name-age")
+async def extract_name_age(
+    doc1: UploadFile = File(...),
+    doc2: UploadFile = File(...)
+):
+    image_paths = []
+
+    for doc in [doc1, doc2]:
+        if doc.content_type not in ALLOWED_TYPES:
+            raise HTTPException(400, "Only PDF or PNG files are allowed")
+
+        temp_path = f"{UPLOAD_DIR}/{uuid.uuid4()}_{doc.filename}"
+        with open(temp_path, "wb") as f:
+            f.write(await doc.read())
+
+        if doc.content_type == "application/pdf":
+            image_paths.extend(pdf_to_images(temp_path, IMAGE_DIR))
+        else:
+            image_paths.append(temp_path)
+
+    # Extract from first page/image only
+    first_page_text = extract_text_from_image(image_paths[0]) if image_paths else ""
+    doc_name, doc_age = extract_patient_name_and_age(first_page_text)
+
+    return {
+        "document_name": doc_name,
+        "document_age": doc_age,
     }
