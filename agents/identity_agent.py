@@ -18,6 +18,19 @@ def identity_verification_agent(state: ClaimState) -> ClaimState:
     # Store the first verified Aadhaar number as the primary one
     primary_aadhaar = verified_numbers[0] if verified_numbers else None
     state["aadhaar_number"] = primary_aadhaar
+    
+    # Store extracted name and age
+    aadhaar_name = result_data.get("aadhaar_name")
+    aadhaar_age = result_data.get("aadhaar_age")
+    state["aadhaar_name"] = aadhaar_name
+    state["aadhaar_age"] = aadhaar_age
+    
+    # Populate cross_agent_data for cross-validation
+    cross_agent_data = state.get("cross_agent_data", {})
+    cross_agent_data["identity_name"] = aadhaar_name
+    cross_agent_data["identity_age"] = aadhaar_age
+    cross_agent_data["identity_aadhaar"] = primary_aadhaar
+    state["cross_agent_data"] = cross_agent_data
 
     result: AgentResult = {
         "agent_name": "IdentityVerificationAgent",
@@ -26,7 +39,9 @@ def identity_verification_agent(state: ClaimState) -> ClaimState:
         "message": "Identity verified successfully" if verified_numbers else "Aadhaar verification failed",
         "metadata": {
             "aadhaar_numbers": verified_numbers,
-            "is_aadhaar": result_data["is_aadhaar"]
+            "is_aadhaar": result_data["is_aadhaar"],
+            "extracted_name": aadhaar_name,
+            "extracted_age": aadhaar_age
         }
     }
 

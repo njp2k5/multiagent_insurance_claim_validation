@@ -1,10 +1,12 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query
 import os, uuid, shutil
+from typing import Optional
 
 from agents.document_agent import document_validation_agent
 from documents.pdf_utils import pdf_to_images
 from documents.ocr import extract_text_from_image, extract_patient_name_and_age
 from state import ClaimState
+from services.claim_store import claim_store
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -19,7 +21,8 @@ ALLOWED_TYPES = ["application/pdf", "image/png"]
 @router.post("/upload-and-validate")
 async def upload_and_validate(
     doc1: UploadFile = File(...),
-    doc2: UploadFile = File(...)
+    doc2: UploadFile = File(...),
+    claim_id: Optional[str] = Query(None, description="Claim ID to update state")
 ):
     image_paths = []
 
@@ -37,20 +40,36 @@ async def upload_and_validate(
         else:
             image_paths.append(temp_path)
 
-    state: ClaimState = {
-        "document_image_paths": image_paths,
-        "agent_results": []
-    }
+    # Use existing claim state if claim_id provided, otherwise create new
+    if claim_id:
+        state = claim_store.get_claim(claim_id)
+        if not state:
+            raise HTTPException(status_code=404, detail=f"Claim {claim_id} not found")
+        state["document_image_paths"] = image_paths
+        if "agent_results" not in state:
+            state["agent_results"] = []
+    else:
+        state: ClaimState = {
+            "document_image_paths": image_paths,
+            "agent_results": []
+        }
 
     updated = document_validation_agent(state)
     result = updated.get("document_result")
 
     if not result:
         raise HTTPException(500, "Document validation failed")
+    
+    # Update claim store if claim_id was provided
+    if claim_id:
+        claim_store.update_claim(claim_id, updated)
 
     return {
         "summary": result["metadata"]["summary"],
-        "agent_status": result["status"]
+        "agent_status": result["status"],
+        "extracted_name": result["metadata"].get("extracted_name"),
+        "extracted_age": result["metadata"].get("extracted_age"),
+        "claim_id": claim_id
     }
 
 

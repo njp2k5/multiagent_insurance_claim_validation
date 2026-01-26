@@ -9,6 +9,32 @@ class AgentResult(TypedDict):
     metadata: Dict[str, Any]
 
 
+class CrossAgentData(TypedDict, total=False):
+    """Data extracted by different agents for cross-validation."""
+    # Identity agent extracted data
+    identity_name: Optional[str]
+    identity_age: Optional[int]
+    identity_aadhaar: Optional[str]
+    
+    # Document agent extracted data
+    document_name: Optional[str]
+    document_age: Optional[int]
+    
+    # Claim form data
+    claim_form_name: Optional[str]
+    claim_form_age: Optional[int]
+
+
+class CrossValidationResult(TypedDict, total=False):
+    """Result of cross-validation between different agents."""
+    status: str  # VERIFIED | MISMATCH | PARTIAL_MATCH | INSUFFICIENT_DATA
+    name_match: bool
+    age_match: bool
+    inconsistencies: List[Dict[str, Any]]
+    confidence: float
+    message: str
+
+
 class ClaimState(TypedDict, total=False):
     user_id: str
     user_email: str
@@ -43,3 +69,7 @@ class ClaimState(TypedDict, total=False):
     document_age: Optional[int]
     document_summary: Optional[str]
     document_result: Optional[AgentResult]
+    
+    # Cross-agent validation data
+    cross_agent_data: Optional[CrossAgentData]
+    cross_validation_result: Optional[CrossValidationResult]
