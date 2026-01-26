@@ -3,9 +3,6 @@ from api.routes import auth, health
 from db.base import Base
 from db.session import engine
 from models.user import User
-from api.routes.claims import router as claims_router
-from api.routes.chat import router as chat_router
-from api.routes.agents import router as agents_router
 from api.routes.identity import router as identity_router
 from api.routes.policy import router as policy_router
 from api.routes.documents import router as documents_router
@@ -29,9 +26,6 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(auth.router)
-    app.include_router(agents_router)
-    app.include_router(claims_router)
-    app.include_router(chat_router)
     app.include_router(identity_router)
     app.include_router(policy_router)
     app.include_router(documents_router)
