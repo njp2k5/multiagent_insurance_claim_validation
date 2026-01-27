@@ -73,3 +73,63 @@ class ClaimState(TypedDict, total=False):
     # Cross-agent validation data
     cross_agent_data: Optional[CrossAgentData]
     cross_validation_result: Optional[CrossValidationResult]
+
+
+class ChatContext(TypedDict, total=False):
+    """Lightweight state for chat agent - contains only relevant claim info."""
+    claim_id: str
+    claim_status: Optional[str]  # Current claim status
+    final_decision: Optional[str]  # APPROVED | REJECTED | HUMAN_REVIEW
+    final_confidence: Optional[float]
+    
+    # Brief summaries from agents
+    identity_status: Optional[str]
+    policy_status: Optional[str]
+    fraud_status: Optional[str]
+    document_status: Optional[str]
+    
+    # User info
+    user_name: Optional[str]
+    policy_type: Optional[str]
+    
+    # Chat history for context
+    chat_history: List[Dict[str, str]]
+    
+    # Validation tracking
+    chat_session_validated: bool
+
+
+def extract_chat_context(state: ClaimState) -> ChatContext:
+    """Extract minimal context from ClaimState for chat agent."""
+    context: ChatContext = {
+        "claim_id": state.get("claim_id") or "",
+        "final_decision": state.get("final_decision"),
+        "final_confidence": state.get("final_confidence"),
+        "chat_history": state.get("chat_history") or [],
+        "chat_session_validated": False,
+    }
+    
+    # Extract agent statuses safely
+    identity_result = state.get("identity_result")
+    if identity_result:
+        context["identity_status"] = identity_result.get("status")
+    
+    policy_result = state.get("policy_result")
+    if policy_result:
+        context["policy_status"] = policy_result.get("status")
+    
+    fraud_result = state.get("fraud_result")
+    if fraud_result:
+        context["fraud_status"] = fraud_result.get("status")
+    
+    document_result = state.get("document_result")
+    if document_result:
+        context["document_status"] = document_result.get("status")
+    
+    # Extract user info
+    context["user_name"] = state.get("aadhaar_name") or state.get("document_name")
+    claim_form = state.get("claim_form")
+    if claim_form:
+        context["policy_type"] = claim_form.get("policy_type")
+    
+    return context

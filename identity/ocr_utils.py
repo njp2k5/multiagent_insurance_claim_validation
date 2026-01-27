@@ -1,12 +1,31 @@
 import re
 from datetime import datetime
-import pytesseract
 from PIL import Image
-import cv2
 
-pytesseract.pytesseract.tesseract_cmd = (
-    r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-)
+_cv2 = None
+_pytesseract = None
+
+
+def _get_cv2():
+    """Lazy load cv2."""
+    global _cv2
+    if _cv2 is None:
+        import cv2
+        _cv2 = cv2
+    return _cv2
+
+
+def _get_pytesseract():
+    """Lazy load pytesseract."""
+    global _pytesseract
+    if _pytesseract is None:
+        import pytesseract
+        pytesseract.pytesseract.tesseract_cmd = (
+            r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+        )
+        _pytesseract = pytesseract
+    return _pytesseract
+
 
 AADHAAR_REGEX = re.compile(r'\b\d{4}\s?\d{4}\s?\d{4}\b')
 AADHAAR_KEYWORDS = ['aadhaar', 'aadhar', 'uidai', 'government of india']
@@ -113,5 +132,7 @@ def extract_age_from_aadhaar(text: str):
 
 
 def ocr_image(image):
+    cv2 = _get_cv2()
+    pytesseract = _get_pytesseract()
     pil = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
     return pytesseract.image_to_string(pil, config="--psm 6")

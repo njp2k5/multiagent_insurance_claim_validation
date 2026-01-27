@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI
 from api.routes import auth, health
 from db.base import Base
@@ -7,6 +10,7 @@ from api.routes.identity import router as identity_router
 from api.routes.policy import router as policy_router
 from api.routes.documents import router as documents_router
 from api.routes.fraud import router as fraud_router
+from api.routes.chat import router as chat_router
 
 
 
@@ -30,6 +34,7 @@ def create_app() -> FastAPI:
     app.include_router(policy_router)
     app.include_router(documents_router)
     app.include_router(fraud_router)
+    app.include_router(chat_router)
     return app
 
 

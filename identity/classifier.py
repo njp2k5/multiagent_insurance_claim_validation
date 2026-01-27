@@ -1,4 +1,3 @@
-import cv2
 from identity.image_utils import resize_max
 from identity.ocr_utils import (
     ocr_image,
@@ -9,8 +8,21 @@ from identity.ocr_utils import (
 )
 from identity.aadhar_validator import verhoeff_validate
 
+_cv2 = None
+
+
+def _get_cv2():
+    """Lazy load cv2."""
+    global _cv2
+    if _cv2 is None:
+        import cv2
+        _cv2 = cv2
+    return _cv2
+
+
 class AadhaarClassifier:
     def classify(self, image_path: str):
+        cv2 = _get_cv2()
         image = cv2.imread(image_path)
         if image is None:
             raise FileNotFoundError("Invalid image path")

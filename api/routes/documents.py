@@ -21,8 +21,7 @@ ALLOWED_TYPES = ["application/pdf", "image/png"]
 @router.post("/upload-and-validate")
 async def upload_and_validate(
     doc1: UploadFile = File(...),
-    doc2: UploadFile = File(...),
-    claim_id: Optional[str] = Query(None, description="Claim ID to update state")
+    doc2: UploadFile = File(...)
 ):
     image_paths = []
 
@@ -40,43 +39,28 @@ async def upload_and_validate(
         else:
             image_paths.append(temp_path)
 
-    # Use existing claim state if claim_id provided, otherwise create new
-    if claim_id:
-        state = claim_store.get_claim(claim_id)
-        if not state:
-            raise HTTPException(status_code=404, detail=f"Claim {claim_id} not found")
-        state["document_image_paths"] = image_paths
-        if "agent_results" not in state:
-            state["agent_results"] = []
-    else:
-        state: ClaimState = {
-            "document_image_paths": image_paths,
-            "agent_results": []
-        }
+    state: ClaimState = {
+        "document_image_paths": image_paths,
+        "agent_results": []
+    }
 
     updated = document_validation_agent(state)
     result = updated.get("document_result")
 
     if not result:
         raise HTTPException(500, "Document validation failed")
-    
-    # Update claim store if claim_id was provided
-    if claim_id:
-        claim_store.update_claim(claim_id, updated)
 
     return {
         "summary": result["metadata"]["summary"],
-        "agent_status": result["status"],
-        "extracted_name": result["metadata"].get("extracted_name"),
-        "extracted_age": result["metadata"].get("extracted_age"),
-        "claim_id": claim_id
+        "agent_status": result["status"]
     }
 
 
 @router.post("/extract-name-age")
 async def extract_name_age(
     doc1: UploadFile = File(...),
-    doc2: UploadFile = File(...)
+    doc2: UploadFile = File(...),
+    claim_id: Optional[str] = Query(None, description="Claim ID to update state with extracted name and age")
 ):
     image_paths = []
 
@@ -96,8 +80,28 @@ async def extract_name_age(
     # Extract from first page/image only
     first_page_text = extract_text_from_image(image_paths[0]) if image_paths else ""
     doc_name, doc_age = extract_patient_name_and_age(first_page_text)
+    
+    # If claim_id provided, update the claim state with extracted data
+    if claim_id:
+        state = claim_store.get_claim(claim_id)
+        if not state:
+            raise HTTPException(status_code=404, detail=f"Claim {claim_id} not found")
+        
+        # Update state with document data
+        state["document_name"] = doc_name
+        state["document_age"] = doc_age
+        state["document_image_paths"] = image_paths
+        
+        # Update cross_agent_data for cross-validation
+        cross_agent_data = state.get("cross_agent_data", {})
+        cross_agent_data["document_name"] = doc_name
+        cross_agent_data["document_age"] = doc_age
+        state["cross_agent_data"] = cross_agent_data
+        
+        claim_store.update_claim(claim_id, state)
 
     return {
         "document_name": doc_name,
         "document_age": doc_age,
+        "claim_id": claim_id
     }
