@@ -12,6 +12,7 @@ from api.routes.documents import router as documents_router
 from api.routes.fraud import router as fraud_router
 from api.routes.chat import router as chat_router
 from api.routes.master import router as master_router
+from api.routes.basic import router as basic_router
 
 
 
@@ -37,6 +38,7 @@ def create_app() -> FastAPI:
     app.include_router(fraud_router)
     app.include_router(chat_router)
     app.include_router(master_router)
+    app.include_router(basic_router)
     return app
 
 

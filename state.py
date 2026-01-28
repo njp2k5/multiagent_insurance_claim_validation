@@ -78,6 +78,13 @@ class ClaimState(TypedDict, total=False):
     # Cross-agent validation data
     cross_agent_data: Optional[CrossAgentData]
     cross_validation_result: Optional[CrossValidationResult]
+    
+    # Category-specific claim details
+    motor_details: Optional[Dict[str, Any]]
+    health_details: Optional[Dict[str, Any]]
+    home_details: Optional[Dict[str, Any]]
+    travel_details: Optional[Dict[str, Any]]
+    life_details: Optional[Dict[str, Any]]
 
 
 class ChatContext(TypedDict, total=False):
