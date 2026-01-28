@@ -74,12 +74,17 @@ def policy_agent(state: ClaimState) -> ClaimState:
 
     plan_code = str(policy.policy_name)
     policy_expiry = cast(date, policy.policy_expiry)
+    policy_start_date = cast(date, policy.policy_start) if hasattr(policy, 'policy_start') else None
 
-    eligible, message = evaluate_policy(
+    # Get claim type/event from state - supports new event categories
+    claim_type = state.get("claim_type") or event  # Use claim_type if available, fallback to event
+
+    eligible, message, coverage_details = evaluate_policy(
         plan_code=plan_code,
         policy_expiry=policy_expiry,
-        event=event,
-        amount_claimed=amount_claimed
+        event=claim_type,
+        amount_claimed=amount_claimed,
+        policy_start_date=policy_start_date
     )
 
     result: AgentResult = {
@@ -90,8 +95,14 @@ def policy_agent(state: ClaimState) -> ClaimState:
         "metadata": {
             "aadhaar_number": aadhaar_no,
             "current_plan": plan_code,
-            "event": event,
-            "amount_claimed": amount_claimed
+            "plan_name": coverage_details.get("plan_name"),
+            "event": claim_type,
+            "amount_claimed": amount_claimed,
+            "covered": coverage_details.get("covered", False),
+            "max_amount": coverage_details.get("max_amount"),
+            "co_pay_percent": coverage_details.get("co_pay_percent"),
+            "claimable_amount": coverage_details.get("claimable_amount"),
+            "coverage_details": coverage_details
         }
     }
 
