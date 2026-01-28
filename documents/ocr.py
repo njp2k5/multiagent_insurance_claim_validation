@@ -1,8 +1,14 @@
 import re
+import hashlib
 from PIL import Image
+from typing import List, Tuple, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 _cv2 = None
 _pytesseract = None
+
+# OCR result cache
+_ocr_cache: dict[str, str] = {}
 
 
 def _get_cv2():
@@ -26,7 +32,33 @@ def _get_pytesseract():
     return _pytesseract
 
 
-def extract_text_from_image(path: str) -> str:
+def _get_file_hash(path: str) -> str:
+    """Get hash of file for caching."""
+    try:
+        with open(path, 'rb') as f:
+            # Read first 8KB for fast hashing
+            return hashlib.md5(f.read(8192)).hexdigest()
+    except:
+        return path
+
+
+def extract_text_from_image(path: str, use_cache: bool = True) -> str:
+    """
+    Extract text from image with caching.
+    
+    Optimizations:
+    - Cache OCR results by file hash
+    - Reduced image scaling (1.5x instead of 2x)
+    - Optimized Tesseract config
+    """
+    file_hash = None
+    
+    # Check cache
+    if use_cache:
+        file_hash = _get_file_hash(path)
+        if file_hash in _ocr_cache:
+            return _ocr_cache[file_hash]
+    
     cv2 = _get_cv2()
     pytesseract = _get_pytesseract()
     
@@ -35,10 +67,61 @@ def extract_text_from_image(path: str) -> str:
         return ""
 
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+    # Reduced scaling for faster processing
+    gray = cv2.resize(gray, None, fx=1.5, fy=1.5, interpolation=cv2.INTER_LINEAR)
 
     pil = Image.fromarray(gray)
-    return pytesseract.image_to_string(pil, config="--psm 6")
+    # Optimized Tesseract config for speed
+    text = pytesseract.image_to_string(pil, config="--psm 6 --oem 1")
+    
+    # Cache result
+    if use_cache and file_hash:
+        _ocr_cache[file_hash] = text
+        # Limit cache size
+        if len(_ocr_cache) > 100:
+            keys = list(_ocr_cache.keys())[:50]
+            for k in keys:
+                del _ocr_cache[k]
+    
+    return text
+
+
+def extract_text_from_images_parallel(paths: List[str], max_workers: int = 2) -> List[str]:
+    """
+    Extract text from multiple images in parallel.
+    
+    Args:
+        paths: List of image paths
+        max_workers: Maximum parallel OCR threads (default 2 to avoid CPU overload)
+    
+    Returns:
+        List of extracted texts in same order as input paths
+    """
+    if not paths:
+        return []
+    
+    if len(paths) == 1:
+        return [extract_text_from_image(paths[0])]
+    
+    results = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_path = {
+            executor.submit(extract_text_from_image, path): (i, path) 
+            for i, path in enumerate(paths)
+        }
+        for future in as_completed(future_to_path):
+            idx, path = future_to_path[future]
+            try:
+                results[idx] = future.result()
+            except Exception:
+                results[idx] = ""
+    
+    return [results.get(i, "") for i in range(len(paths))]
+
+
+def clear_ocr_cache():
+    """Clear the OCR cache."""
+    _ocr_cache.clear()
 
 
 def extract_patient_name_and_age(text: str):

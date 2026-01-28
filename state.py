@@ -42,6 +42,11 @@ class ClaimState(TypedDict, total=False):
 
     claim_id: Optional[str]
     claim_form: Optional[Dict[str, Any]]
+    
+    # Claimant type: 'user' or 'company'
+    claimant_type: Optional[str]
+    # Type of claim: e.g., 'health', 'vehicle', 'property', 'life', etc.
+    claim_type: Optional[str]
 
     identity_result: Optional[AgentResult]
     policy_result: Optional[AgentResult]

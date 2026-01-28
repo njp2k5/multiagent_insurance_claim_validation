@@ -1,12 +1,13 @@
 from state import ClaimState, AgentResult
-from documents.ocr import extract_text_from_image, extract_patient_name_and_age
+from documents.ocr import extract_text_from_images_parallel, extract_patient_name_and_age
 from documents.embeddings import build_vector_store
 from documents.rag import summarize_documents
 
 def document_validation_agent(state: ClaimState) -> ClaimState:
     image_paths = state.get("document_image_paths", [])
 
-    texts = [extract_text_from_image(p) for p in image_paths]
+    # Use parallel OCR for faster processing
+    texts = extract_text_from_images_parallel(image_paths)
     
     # Extract name and age from all documents
     extracted_name = None
@@ -20,14 +21,21 @@ def document_validation_agent(state: ClaimState) -> ClaimState:
         if extracted_name and extracted_age:
             break
 
-    vector_db = build_vector_store(texts)
-    retrieved = vector_db.similarity_search(
-        "Summarize and validate insurance documents",
-        k=2
-    )
+    # Handle empty texts case
+    if not texts or all(not t.strip() for t in texts):
+        summary = "No readable content found in the uploaded documents."
+        context = ""
+    else:
+        vector_db = build_vector_store(texts)
+        # Reduce k to 1 for faster retrieval with small doc sets
+        k_value = max(1, min(len(texts), 2))
+        retrieved = vector_db.similarity_search(
+            "Summarize and validate insurance documents",
+            k=k_value
+        )
 
-    context = "\n\n".join(d.page_content for d in retrieved)
-    summary = summarize_documents(context)
+        context = "\n\n".join(d.page_content for d in retrieved)
+        summary = summarize_documents(context) if context.strip() else "No content extracted from documents."
 
     status = "PASS" if summary else "INFO"
     

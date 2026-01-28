@@ -21,7 +21,8 @@ ALLOWED_TYPES = ["application/pdf", "image/png"]
 @router.post("/upload-and-validate")
 async def upload_and_validate(
     doc1: UploadFile = File(...),
-    doc2: UploadFile = File(...)
+    doc2: UploadFile = File(...),
+    claim_id: Optional[str] = Query(None, description="Claim ID to update state with document validation results")
 ):
     image_paths = []
 
@@ -39,10 +40,17 @@ async def upload_and_validate(
         else:
             image_paths.append(temp_path)
 
-    state: ClaimState = {
-        "document_image_paths": image_paths,
-        "agent_results": []
-    }
+    # If claim_id provided, use existing claim state; otherwise create a fresh state
+    if claim_id:
+        state = claim_store.get_claim(claim_id)
+        if not state:
+            raise HTTPException(status_code=404, detail=f"Claim {claim_id} not found")
+        state["document_image_paths"] = image_paths
+    else:
+        state: ClaimState = {
+            "document_image_paths": image_paths,
+            "agent_results": []
+        }
 
     updated = document_validation_agent(state)
     result = updated.get("document_result")
@@ -50,9 +58,22 @@ async def upload_and_validate(
     if not result:
         raise HTTPException(500, "Document validation failed")
 
+    # If claim_id provided, persist the updated state with document results
+    if claim_id:
+        # Update cross_agent_data for cross-validation
+        cross_agent_data = updated.get("cross_agent_data", {})
+        if updated.get("document_name"):
+            cross_agent_data["document_name"] = updated.get("document_name")
+        if updated.get("document_age"):
+            cross_agent_data["document_age"] = updated.get("document_age")
+        updated["cross_agent_data"] = cross_agent_data
+        
+        claim_store.update_claim(claim_id, updated)
+
     return {
         "summary": result["metadata"]["summary"],
-        "agent_status": result["status"]
+        "agent_status": result["status"],
+        "claim_id": claim_id
     }
 
 
