@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 # In-memory cache for document summaries
 _summary_cache: dict[str, str] = {}
@@ -58,9 +58,9 @@ def summarize_documents(context: str, max_context_chars: int = 2000) -> str:
     if len(context) > max_context_chars:
         truncated_context += "\n[Document truncated for processing...]"
     
-    # Get environment variables
-    api_key = os.getenv("OPENROUTER_API_KEY")
-    model = os.getenv("OPENROUTER_MODEL", "arcee-ai/trinity-mini:free")
+    # Get environment variables for Groq
+    api_key = os.getenv("GROQ_API_KEY")
+    model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
     
     print(f"[DEBUG] API Key present: {bool(api_key)}")
     print(f"[DEBUG] API Key (first 10 chars): {api_key[:10] if api_key else 'None'}...")
@@ -68,7 +68,7 @@ def summarize_documents(context: str, max_context_chars: int = 2000) -> str:
     print(f"[DEBUG] Truncated context length: {len(truncated_context)}")
     
     if not api_key:
-        print("[ERROR] OPENROUTER_API_KEY not found!")
+        print("[ERROR] GROQ_API_KEY not found!")
         return "Document validation failed: API key not configured."
     
     payload = {
@@ -90,16 +90,14 @@ def summarize_documents(context: str, max_context_chars: int = 2000) -> str:
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "http://localhost:8000",
-        "X-Title": "Insurance Claim Validator"
     }
-    
-    print(f"[DEBUG] Request URL: {OPENROUTER_URL}")
+
+    print(f"[DEBUG] Request URL: {GROQ_URL}")
     print(f"[DEBUG] Request payload model: {payload['model']}")
 
     try:
-        print("[DEBUG] Sending POST request to OpenRouter...")
-        res = requests.post(OPENROUTER_URL, json=payload, headers=headers, timeout=30)
+        print("[DEBUG] Sending POST request to Groq...")
+        res = requests.post(GROQ_URL, json=payload, headers=headers, timeout=30)
         
         print(f"[DEBUG] Response status code: {res.status_code}")
         print(f"[DEBUG] Response headers: {dict(res.headers)}")
@@ -133,17 +131,8 @@ def summarize_documents(context: str, max_context_chars: int = 2000) -> str:
         message = choices[0].get("message", {})
         print(f"[DEBUG] Message keys: {message.keys()}")
         
-        # Try content first, then reasoning (for reasoning models like trinity-mini)
+        # Use content directly; Groq models do not provide a reasoning field
         summary = message.get("content", "").strip()
-        
-        # If content is empty, check reasoning field (used by reasoning models)
-        if not summary:
-            reasoning = message.get("reasoning", "")
-            if reasoning:
-                print(f"[DEBUG] Content empty, using reasoning field instead")
-                # Extract the actual summary from reasoning (usually at the end after thinking)
-                # Look for the final conclusion/summary in the reasoning
-                summary = _extract_summary_from_reasoning(reasoning)
         
         print(f"[DEBUG] Extracted summary length: {len(summary)}")
         print(f"[DEBUG] Summary content: {summary[:200] if summary else 'EMPTY'}...")

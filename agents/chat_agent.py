@@ -7,9 +7,9 @@ import requests
 from typing import Tuple, Dict, List
 from state import ChatContext
 
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 # Use the same model as RAG from environment, or fallback
-CHAT_MODEL = os.getenv("OPENROUTER_MODEL", "arcee-ai/trinity-mini:free")
+CHAT_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 MAX_TOKENS = 150  # Keep responses short
 
 
@@ -100,17 +100,17 @@ def chat_agent(context: ChatContext, message: str) -> Tuple[str, ChatContext]:
     }
     
     headers = {
-        "Authorization": f"Bearer {os.getenv('OPENROUTER_API_KEY')}",
+        "Authorization": f"Bearer {os.getenv('GROQ_API_KEY')}",
         "Content-Type": "application/json"
     }
     
     try:
-        res = requests.post(OPENROUTER_URL, json=payload, headers=headers, timeout=30)
+        res = requests.post(GROQ_URL, json=payload, headers=headers, timeout=30)
         res.raise_for_status()
         data = res.json()
-        # Handle both content and reasoning responses
+        # Groq responses include content; reasoning field is not present for this model
         msg = data["choices"][0]["message"]
-        reply = msg.get("content") or msg.get("reasoning", "").strip()
+        reply = msg.get("content", "").strip()
         if not reply:
             reply = "I received your message but couldn't generate a response."
     except requests.RequestException as e:
