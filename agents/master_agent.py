@@ -2,23 +2,58 @@ import os
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from state import ClaimState
+import requests
+from requests.exceptions import Timeout, RequestException
 
 
 def master_decision_agent(state: ClaimState) -> ClaimState:
-    results = state["agent_results"]
-    avg_conf = sum(r["confidence"] for r in results) / len(results)
+    """
+    Rule-based master decision logic that considers state updates from other agents:
+    - If user doesn't have a policy: REJECTED
+    - If user doesn't upload documents: REJECTED
+    - If fraud detection detects anomaly/mismatch: REJECTED
+    - Otherwise: APPROVED
+    """
+    reasons: List[str] = []
 
-    if any(r["status"] == "FAIL" for r in results):
+    policy_result = state.get("policy_result")
+    document_paths = state.get("document_image_paths") or []
+    document_result = state.get("document_result")
+    fraud_result = state.get("fraud_result")
+    cross_val = state.get("cross_validation_result")
+
+    # Check policy presence/eligibility
+    if not policy_result or policy_result.get("status") != "PASS":
+        reasons.append("No valid policy or policy ineligible")
+
+    # Check documents uploaded
+    if not document_paths or len(document_paths) == 0:
+        reasons.append("No documents uploaded")
+
+    # Check fraud/anomaly/mismatch
+    fraud_flag = (fraud_result and fraud_result.get("status") == "FLAG")
+    mismatch_flag = (cross_val and cross_val.get("status") == "MISMATCH")
+    if fraud_flag or mismatch_flag:
+        reasons.append("Fraud anomaly or identity/document mismatch detected")
+
+    if reasons:
         decision = "REJECTED"
-    elif any(r["status"] == "FLAG" for r in results) or avg_conf < 0.7:
-        decision = "HUMAN_REVIEW"
     else:
         decision = "APPROVED"
 
+    # Confidence heuristic: average of agent confidences if available, else rule-based default
+    agent_results = state.get("agent_results") or []
+    if agent_results:
+        avg_conf = sum(r.get("confidence", 0.0) for r in agent_results) / max(len(agent_results), 1)
+    else:
+        avg_conf = 0.9 if decision == "APPROVED" else 0.5
+
     state["final_decision"] = decision
     state["final_confidence"] = round(avg_conf, 2)
+    state["decision_reasons"] = reasons
+    state["decision_source"] = "rule-based-v1"
     return state
 
 
@@ -28,6 +63,7 @@ def get_agent_summary(state: ClaimState) -> Dict[str, Any]:
         "claim_id": state.get("claim_id", "N/A"),
         "final_decision": state.get("final_decision", "PENDING"),
         "final_confidence": state.get("final_confidence", 0.0),
+        "decision_reasons": state.get("decision_reasons", []),
         "identity": None,
         "policy": None,
         "document": None,
@@ -97,8 +133,67 @@ def get_agent_summary(state: ClaimState) -> Dict[str, Any]:
     return summary
 
 
+def _compose_personalized_snippet(summary: Dict[str, Any]) -> Optional[str]:
+    """
+    Attempt to compose a personalized message using an external API.
+    Falls back to None on timeout or any error.
+    Configure via MAIL_COMPOSE_API_URL and MAIL_COMPOSE_TIMEOUT env vars.
+    """
+    api_url = os.getenv("MAIL_COMPOSE_API_URL")
+    if not api_url:
+        return None
+
+    timeout_seconds = float(os.getenv("MAIL_COMPOSE_TIMEOUT", "5"))
+    payload = {
+        "decision": summary.get("final_decision"),
+        "claim_id": summary.get("claim_id"),
+        "document_summary": (summary.get("document") or {}).get("summary"),
+        "policy": summary.get("policy"),
+        "identity": summary.get("identity"),
+        "fraud": summary.get("fraud"),
+    }
+    try:
+        resp = requests.post(api_url, json=payload, timeout=timeout_seconds)
+        if resp.status_code == 200:
+            data = resp.json() if "application/json" in resp.headers.get("Content-Type", "") else {}
+            html = data.get("html") or data.get("content")
+            return html
+        return None
+    except Timeout:
+        # Explicit timeout fallback
+        return None
+    except RequestException:
+        return None
+
+
+def _fallback_template(decision: str, summary: Dict[str, Any]) -> str:
+    """Predefined acceptance/rejection snippet using document summary for personalization."""
+    doc_summary = (summary.get("document") or {}).get("summary") or ""
+    short_summary = (doc_summary[:180] + "...") if doc_summary and len(doc_summary) > 180 else doc_summary
+    reasons = summary.get("decision_reasons") or []
+
+    if decision == "APPROVED":
+        return f"""
+        <div class=\"section\">
+            <h3>💬 Personalized Note</h3>
+            <p>Based on the documents you shared{': ' + short_summary if short_summary else ''}, your claim has been approved. Our team will proceed with the next steps promptly.</p>
+        </div>
+        """
+    else:
+        reasons_html = "".join(f"<li>{r}</li>" for r in reasons) if reasons else "<li>Your claim did not meet eligibility criteria.</li>"
+        return f"""
+        <div class=\"section\">
+            <h3>💬 Decision Summary</h3>
+            <p>We carefully reviewed your submission{': ' + short_summary if short_summary else ''}.</p>
+            <p>The claim was not approved for the following reason(s):</p>
+            <ul>{reasons_html}</ul>
+            <p>If you can address the above, you may reapply or file an appeal within 30 days.</p>
+        </div>
+        """
+
+
 def draft_claim_email(user_email: str, summary: Dict[str, Any]) -> str:
-    """Draft a customized email based on agent summaries."""
+    """Draft a customized email based on agent summaries with API compose and fallback templates."""
     
     decision = summary.get("final_decision", "PENDING")
     confidence = summary.get("final_confidence", 0.0)
@@ -157,6 +252,13 @@ def draft_claim_email(user_email: str, summary: Dict[str, Any]) -> str:
                     <p>Confidence Score: {confidence:.0%}</p>
                 </div>
     """
+
+    # Try personalized compose via external API, else fallback template
+    personalized_snippet = _compose_personalized_snippet(summary)
+    if personalized_snippet:
+        html_content += personalized_snippet
+    else:
+        html_content += _fallback_template(decision, summary)
     
     # Identity Verification Section
     identity = summary.get("identity")
