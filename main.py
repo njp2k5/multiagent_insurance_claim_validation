@@ -2,10 +2,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 from api.routes import auth, health
 from db.base import Base
 from db.session import engine
 from models.user import User
+
 from api.routes.identity import router as identity_router
 from api.routes.policy import router as policy_router
 from api.routes.documents import router as documents_router
@@ -15,13 +18,26 @@ from api.routes.master import router as master_router
 from api.routes.basic import router as basic_router
 
 
-
-
-
-
 def create_app() -> FastAPI:
     app = FastAPI(title="Multi Agent Insurance Claim Validation System")
 
+    # =========================
+    # CORS CONFIGURATION
+    # =========================
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:5000",
+            "http://127.0.0.1:5000",
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],   # allows OPTIONS, POST, PUT, DELETE
+        allow_headers=["*"],   # allows Authorization, Content-Type
+    )
+
+    # =========================
+    # STARTUP EVENT
+    # =========================
     @app.on_event("startup")
     def startup() -> None:
         try:
@@ -30,6 +46,9 @@ def create_app() -> FastAPI:
         except Exception as e:
             print(f"Error during startup: {e}")
 
+    # =========================
+    # ROUTES (AFTER CORS)
+    # =========================
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(identity_router)
@@ -39,6 +58,7 @@ def create_app() -> FastAPI:
     app.include_router(chat_router)
     app.include_router(master_router)
     app.include_router(basic_router)
+
     return app
 
 
