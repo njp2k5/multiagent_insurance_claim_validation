@@ -44,15 +44,14 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 @router.get("/send-report")
 def send_claim_report(
-    claim_id: Optional[str] = Query(None, description="Specific claim ID to send report for. If not provided, sends report for the latest claim."),
-    current_user: User = Depends(get_current_user)
+    claim_id: str = Query(..., description="Required claim ID to send report for.")
 ):
     """
     Master Agent endpoint that:
     1. Combines and analyzes results from all agents (Identity, Policy, Document, Fraud)
     2. Makes a final decision on the claim
     3. Drafts a customized email with all agent findings
-    4. Sends the email to the authenticated user's email address
+    4. Sends the email to the user's email address from the claim state
     
     The email includes:
     - Final claim decision (APPROVED/REJECTED/HUMAN_REVIEW)
@@ -63,36 +62,21 @@ def send_claim_report(
     - Fraud detection analysis
     - Next steps based on decision
     """
-    user_email = current_user.username  # username is the email
-    
     # Get the claim state
-    if claim_id:
-        state = claim_store.get_claim(claim_id)
-        if not state:
-            raise HTTPException(
-                status_code=404, 
-                detail=f"Claim with ID '{claim_id}' not found"
-            )
-    else:
-        # Get the latest claim for this user or any claim if user filter not available
-        all_claims = claim_store.list_claims()
-        if not all_claims:
-            raise HTTPException(
-                status_code=404,
-                detail="No claims found. Please submit a claim first."
-            )
-        
-        # Try to find a claim for this user, or get the most recent one
-        user_claims = [
-            (cid, state) for cid, state in all_claims.items()
-            if state.get("user_email") == user_email or state.get("user_id") == user_email
-        ]
-        
-        if user_claims:
-            claim_id, state = user_claims[-1]  # Get the latest user claim
-        else:
-            # Fall back to the last claim in the store
-            claim_id, state = list(all_claims.items())[-1]
+    state = claim_store.get_claim(claim_id)
+    if not state:
+        raise HTTPException(
+            status_code=404, 
+            detail=f"Claim with ID '{claim_id}' not found"
+        )
+    
+    # Get user email from claim state
+    user_email = state.get("user_email")
+    if not user_email:
+        raise HTTPException(
+            status_code=400,
+            detail="User email not found in claim state. Cannot send report."
+        )
     
     # Check if there are any agent results to process
     if not state.get("agent_results"):
@@ -117,6 +101,8 @@ def send_claim_report(
         "message": "Claim report email sent successfully",
         "recipient": user_email,
         "claim_id": claim_id,
+        # Convenience link for front-end or email templates: includes claim_id as query parameter
+        "send_report_link": f"/master/send-report?claim_id={claim_id}",
         "decision": result["summary"].get("final_decision"),
         "confidence": result["summary"].get("final_confidence"),
         "email_sent": True
@@ -141,6 +127,9 @@ def get_claim_summary(
                 status_code=404,
                 detail=f"Claim with ID '{claim_id}' not found"
             )
+        # Update user_email in claim state
+        state["user_email"] = user_email
+        claim_store.update_claim(claim_id, state)
     else:
         all_claims = claim_store.list_claims()
         if not all_claims:
@@ -158,6 +147,10 @@ def get_claim_summary(
             claim_id, state = user_claims[-1]
         else:
             claim_id, state = list(all_claims.items())[-1]
+        
+        # Update user_email in claim state
+        state["user_email"] = user_email
+        claim_store.update_claim(claim_id, state)
     
     # Run decision if not already done
     if not state.get("final_decision") and state.get("agent_results"):
@@ -193,6 +186,9 @@ def preview_email(
                 status_code=404,
                 detail=f"Claim with ID '{claim_id}' not found"
             )
+        # Update user_email in claim state
+        state["user_email"] = user_email
+        claim_store.update_claim(claim_id, state)
     else:
         all_claims = claim_store.list_claims()
         if not all_claims:
@@ -201,6 +197,9 @@ def preview_email(
                 detail="No claims found."
             )
         claim_id, state = list(all_claims.items())[-1]
+        # Update user_email in claim state
+        state["user_email"] = user_email
+        claim_store.update_claim(claim_id, state)
     
     if not state.get("final_decision") and state.get("agent_results"):
         state = master_decision_agent(state)
