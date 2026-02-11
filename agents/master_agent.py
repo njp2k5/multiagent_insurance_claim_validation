@@ -10,33 +10,52 @@ from requests.exceptions import Timeout, RequestException
 
 def master_decision_agent(state: ClaimState) -> ClaimState:
     """
-    Rule-based master decision logic that considers state updates from other agents:
-    - If user doesn't have a policy: REJECTED
-    - If user doesn't upload documents: REJECTED
-    - If fraud detection detects anomaly/mismatch: REJECTED
-    - Otherwise: APPROVED
+    Rule-based master decision logic that considers state updates from other agents.
+    Works with whatever data is available in the claim state.
+    
+    Decision rules:
+    - If fraud detected or identity mismatch: REJECTED
+    - If policy check failed: REJECTED  
+    - If identity verification failed: REJECTED
+    - Otherwise: APPROVED (proceeds with available data)
     """
     reasons: List[str] = []
+    has_any_data = False
 
+    # Get all agent results from claim state
     policy_result = state.get("policy_result")
+    identity_result = state.get("identity_result")
     document_paths = state.get("document_image_paths") or []
     document_result = state.get("document_result")
     fraud_result = state.get("fraud_result")
     cross_val = state.get("cross_validation_result")
+    
+    # Track if we have any meaningful data
+    if policy_result or identity_result or document_result or fraud_result:
+        has_any_data = True
 
-    # Check policy presence/eligibility
-    if not policy_result or policy_result.get("status") != "PASS":
-        reasons.append("No valid policy or policy ineligible")
+    # Check identity verification if available
+    if identity_result:
+        if identity_result.get("status") == "FAIL":
+            reasons.append("Identity verification failed")
+    
+    # Check policy presence/eligibility if available
+    if policy_result:
+        if policy_result.get("status") != "PASS":
+            reasons.append("Policy check did not pass")
+    
+    # Check document verification if available
+    if document_result:
+        if document_result.get("status") == "FAIL":
+            reasons.append("Document verification failed")
 
-    # Check documents uploaded
-    if not document_paths or len(document_paths) == 0:
-        reasons.append("No documents uploaded")
-
-    # Check fraud/anomaly/mismatch
+    # Check fraud/anomaly/mismatch - these are hard rejections
     fraud_flag = (fraud_result and fraud_result.get("status") == "FLAG")
     mismatch_flag = (cross_val and cross_val.get("status") == "MISMATCH")
-    if fraud_flag or mismatch_flag:
-        reasons.append("Fraud anomaly or identity/document mismatch detected")
+    if fraud_flag:
+        reasons.append("Fraud anomaly detected")
+    if mismatch_flag:
+        reasons.append("Identity/document mismatch detected")
 
     if reasons:
         decision = "REJECTED"
@@ -195,9 +214,17 @@ def _fallback_template(decision: str, summary: Dict[str, Any]) -> str:
 def draft_claim_email(user_email: str, summary: Dict[str, Any]) -> str:
     """Draft a customized email based on agent summaries with API compose and fallback templates."""
     
-    decision = summary.get("final_decision", "PENDING")
-    confidence = summary.get("final_confidence", 0.0)
-    claim_id = summary.get("claim_id", "N/A")
+    def _safe_float(value: Any, default: float = 0.0) -> float:
+        try:
+            if value is None:
+                return default
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    decision = summary.get("final_decision") or "PENDING"
+    confidence = _safe_float(summary.get("final_confidence"), 0.0)
+    claim_id = summary.get("claim_id") or "N/A"
     
     # Determine greeting and tone based on decision
     if decision == "APPROVED":
@@ -263,15 +290,17 @@ def draft_claim_email(user_email: str, summary: Dict[str, Any]) -> str:
     # Identity Verification Section
     identity = summary.get("identity")
     if identity:
-        status_class = "status-pass" if identity["status"] == "PASS" else "status-fail"
+        identity_status = identity.get("status") or "N/A"
+        status_class = "status-pass" if identity_status == "PASS" else "status-fail"
+        identity_conf = _safe_float(identity.get("confidence"), 0.0)
         html_content += f"""
                 <div class="section">
                     <h3>🪪 Identity Verification</h3>
                     <table>
-                        <tr><td>Status:</td><td class="{status_class}">{identity['status']}</td></tr>
-                        <tr><td>Confidence:</td><td>{identity['confidence']:.0%}</td></tr>
+                        <tr><td>Status:</td><td class="{status_class}">{identity_status}</td></tr>
+                        <tr><td>Confidence:</td><td>{identity_conf:.0%}</td></tr>
                         <tr><td>Name:</td><td>{identity.get('aadhaar_name') or 'N/A'}</td></tr>
-                        <tr><td>Message:</td><td>{identity['message']}</td></tr>
+                        <tr><td>Message:</td><td>{identity.get('message') or 'N/A'}</td></tr>
                     </table>
                 </div>
         """
@@ -279,17 +308,19 @@ def draft_claim_email(user_email: str, summary: Dict[str, Any]) -> str:
     # Policy Verification Section
     policy = summary.get("policy")
     if policy:
-        status_class = "status-pass" if policy["status"] == "PASS" else "status-fail"
+        policy_status = policy.get("status") or "N/A"
+        status_class = "status-pass" if policy_status == "PASS" else "status-fail"
+        policy_conf = _safe_float(policy.get("confidence"), 0.0)
         html_content += f"""
                 <div class="section">
                     <h3>📋 Policy Verification</h3>
                     <table>
-                        <tr><td>Status:</td><td class="{status_class}">{policy['status']}</td></tr>
-                        <tr><td>Confidence:</td><td>{policy['confidence']:.0%}</td></tr>
+                        <tr><td>Status:</td><td class="{status_class}">{policy_status}</td></tr>
+                        <tr><td>Confidence:</td><td>{policy_conf:.0%}</td></tr>
                         <tr><td>Policy Plan:</td><td>{policy.get('plan') or 'N/A'}</td></tr>
                         <tr><td>Claim Event:</td><td>{policy.get('event') or 'N/A'}</td></tr>
                         <tr><td>Amount Claimed:</td><td>₹{policy.get('amount_claimed') or 'N/A'}</td></tr>
-                        <tr><td>Message:</td><td>{policy['message']}</td></tr>
+                        <tr><td>Message:</td><td>{policy.get('message') or 'N/A'}</td></tr>
                     </table>
                 </div>
         """
@@ -297,7 +328,9 @@ def draft_claim_email(user_email: str, summary: Dict[str, Any]) -> str:
     # Document Verification Section
     document = summary.get("document")
     if document:
-        status_class = "status-pass" if document["status"] == "PASS" else "status-info"
+        document_status = document.get("status") or "N/A"
+        status_class = "status-pass" if document_status == "PASS" else "status-info"
+        document_conf = _safe_float(document.get("confidence"), 0.0)
         doc_summary = document.get('summary') or 'N/A'
         if len(doc_summary) > 200:
             doc_summary = doc_summary[:200] + "..."
@@ -305,8 +338,8 @@ def draft_claim_email(user_email: str, summary: Dict[str, Any]) -> str:
                 <div class="section">
                     <h3>📄 Document Analysis</h3>
                     <table>
-                        <tr><td>Status:</td><td class="{status_class}">{document['status']}</td></tr>
-                        <tr><td>Confidence:</td><td>{document['confidence']:.0%}</td></tr>
+                        <tr><td>Status:</td><td class="{status_class}">{document_status}</td></tr>
+                        <tr><td>Confidence:</td><td>{document_conf:.0%}</td></tr>
                         <tr><td>Extracted Name:</td><td>{document.get('extracted_name') or 'N/A'}</td></tr>
                         <tr><td>Summary:</td><td>{doc_summary}</td></tr>
                     </table>
@@ -316,15 +349,18 @@ def draft_claim_email(user_email: str, summary: Dict[str, Any]) -> str:
     # Cross-Validation Section
     cross_val = summary.get("cross_validation")
     if cross_val:
-        status_class = "status-pass" if cross_val["status"] == "VERIFIED" else "status-fail"
+        cross_status = cross_val.get("status") or "N/A"
+        status_class = "status-pass" if cross_status == "VERIFIED" else "status-fail"
+        name_match = bool(cross_val.get("name_match"))
+        age_match = bool(cross_val.get("age_match"))
         html_content += f"""
                 <div class="section">
                     <h3>🔍 Cross-Validation</h3>
                     <table>
-                        <tr><td>Status:</td><td class="{status_class}">{cross_val['status']}</td></tr>
-                        <tr><td>Name Match:</td><td>{'✓ Yes' if cross_val['name_match'] else '✗ No'}</td></tr>
-                        <tr><td>Age Match:</td><td>{'✓ Yes' if cross_val['age_match'] else '✗ No'}</td></tr>
-                        <tr><td>Message:</td><td>{cross_val['message']}</td></tr>
+                        <tr><td>Status:</td><td class="{status_class}">{cross_status}</td></tr>
+                        <tr><td>Name Match:</td><td>{'✓ Yes' if name_match else '✗ No'}</td></tr>
+                        <tr><td>Age Match:</td><td>{'✓ Yes' if age_match else '✗ No'}</td></tr>
+                        <tr><td>Message:</td><td>{cross_val.get('message') or 'N/A'}</td></tr>
                     </table>
                 </div>
         """
@@ -332,14 +368,16 @@ def draft_claim_email(user_email: str, summary: Dict[str, Any]) -> str:
     # Fraud Detection Section
     fraud = summary.get("fraud")
     if fraud:
-        status_class = "status-pass" if fraud["status"] == "PASS" else "status-fail"
+        fraud_status = fraud.get("status") or "N/A"
+        status_class = "status-pass" if fraud_status == "PASS" else "status-fail"
+        fraud_conf = _safe_float(fraud.get("confidence"), 0.0)
         html_content += f"""
                 <div class="section">
                     <h3>🛡️ Fraud Analysis</h3>
                     <table>
-                        <tr><td>Status:</td><td class="{status_class}">{fraud['status']}</td></tr>
-                        <tr><td>Confidence:</td><td>{fraud['confidence']:.0%}</td></tr>
-                        <tr><td>Message:</td><td>{fraud['message']}</td></tr>
+                        <tr><td>Status:</td><td class="{status_class}">{fraud_status}</td></tr>
+                        <tr><td>Confidence:</td><td>{fraud_conf:.0%}</td></tr>
+                        <tr><td>Message:</td><td>{fraud.get('message') or 'N/A'}</td></tr>
                     </table>
                 </div>
         """

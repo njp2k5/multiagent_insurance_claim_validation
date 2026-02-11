@@ -56,6 +56,8 @@ class ClaimState(TypedDict, total=False):
 
     final_decision: Optional[str]      # APPROVED | REJECTED | HUMAN_REVIEW
     final_confidence: Optional[float]
+    decision_reasons: Optional[List[str]]
+    decision_source: Optional[str]
 
     chat_history: List[Dict[str, str]]
     email_sent: bool
