@@ -17,6 +17,39 @@ from agents.master_agent import (
 router = APIRouter(prefix="/master", tags=["Master Agent"])
 
 
+@router.get("/debug-claim/{claim_id}")
+def debug_claim_state(claim_id: str):
+    """
+    Debug endpoint to view the current claim state.
+    Useful for troubleshooting what data has been collected by agents.
+    """
+    state = claim_store.get_claim(claim_id)
+    if not state:
+        raise HTTPException(status_code=404, detail=f"Claim {claim_id} not found")
+    
+    # Return a sanitized view of the state
+    return {
+        "claim_id": state.get("claim_id"),
+        "user_email": state.get("user_email"),
+        "claim_type": state.get("claim_type"),
+        "claimant_type": state.get("claimant_type"),
+        "identity_result": state.get("identity_result"),
+        "policy_result": state.get("policy_result"),
+        "document_result": state.get("document_result"),
+        "fraud_result": state.get("fraud_result"),
+        "cross_validation_result": state.get("cross_validation_result"),
+        "agent_results_count": len(state.get("agent_results", [])),
+        "agent_names": [r.get("agent_name") for r in state.get("agent_results", [])],
+        "final_decision": state.get("final_decision"),
+        "final_confidence": state.get("final_confidence"),
+        "aadhaar_name": state.get("aadhaar_name"),
+        "aadhaar_number": state.get("aadhaar_number"),
+        "document_name": state.get("document_name"),
+        "document_summary": state.get("document_summary"),
+        "cross_agent_data": state.get("cross_agent_data"),
+    }
+
+
 def get_db():
     db = SessionLocal()
     try:

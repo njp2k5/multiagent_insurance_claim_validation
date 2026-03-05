@@ -31,18 +31,25 @@ def cross_validate_agent_data(state: ClaimState) -> CrossValidationResult:
     Cross-validate data extracted by different agents.
     Compares identity data with document data and claim form data.
     """
-    cross_data = state.get("cross_agent_data", {})
+    cross_data = state.get("cross_agent_data") or {}
     
     # Get names from different sources
     identity_name = cross_data.get("identity_name")
-    document_name = cross_data.get("document_name")
-    claim_form = state.get("claim_form", {})
+    # Fall back to top-level state fields in case cross_agent_data was not yet populated
+    document_name = cross_data.get("document_name") or state.get("document_name")
+    claim_form = state.get("claim_form") or {}
     claim_form_name = claim_form.get("claimant_name") or claim_form.get("name")
     
     # Get ages from different sources
     identity_age = cross_data.get("identity_age")
-    document_age = cross_data.get("document_age")
-    claim_form_age = claim_form.get("age")
+    # Fall back to top-level state fields in case cross_agent_data was not yet populated
+    document_age = cross_data.get("document_age") or state.get("document_age")
+    # Safely cast claim_form_age to int — form submissions may deliver it as a string
+    _raw_form_age = claim_form.get("age")
+    try:
+        claim_form_age = int(_raw_form_age) if _raw_form_age is not None else None
+    except (TypeError, ValueError):
+        claim_form_age = None
     
     # Store claim form data in cross_agent_data
     if claim_form_name:

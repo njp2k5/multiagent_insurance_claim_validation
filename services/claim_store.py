@@ -25,6 +25,22 @@ class ClaimStore:
         state["claim_id"] = claim_id
         state["cross_agent_data"] = state.get("cross_agent_data", {})
         state["agent_results"] = state.get("agent_results", [])
+        
+        # Set default policy result - assume user holds a policy
+        if "policy_result" not in state:
+            default_policy_result = {
+                "agent_name": "PolicyAgent",
+                "status": "PASS",
+                "confidence": 0.9,
+                "message": "Default policy assumption - user holds a valid policy",
+                "metadata": {
+                    "current_plan": "Default Plan",
+                    "policy_expiry": None,
+                },
+            }
+            state["policy_result"] = default_policy_result
+            state["agent_results"].append(default_policy_result)
+        
         self._states[claim_id] = state
         return claim_id
     

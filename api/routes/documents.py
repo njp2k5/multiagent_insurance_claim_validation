@@ -61,7 +61,8 @@ async def upload_and_validate(
     # If claim_id provided, persist the updated state with document results
     if claim_id:
         # Update cross_agent_data for cross-validation
-        cross_agent_data = updated.get("cross_agent_data", {})
+        # Use 'or {}' to safely handle cases where cross_agent_data is explicitly None
+        cross_agent_data = updated.get("cross_agent_data") or {}
         if updated.get("document_name"):
             cross_agent_data["document_name"] = updated.get("document_name")
         if updated.get("document_age"):
@@ -114,9 +115,12 @@ async def extract_name_age(
         state["document_image_paths"] = image_paths
         
         # Update cross_agent_data for cross-validation
-        cross_agent_data = state.get("cross_agent_data", {})
-        cross_agent_data["document_name"] = doc_name
-        cross_agent_data["document_age"] = doc_age
+        # Use 'or {}' to safely handle cases where cross_agent_data is explicitly None
+        cross_agent_data = state.get("cross_agent_data") or {}
+        if doc_name is not None:
+            cross_agent_data["document_name"] = doc_name
+        if doc_age is not None:
+            cross_agent_data["document_age"] = doc_age
         state["cross_agent_data"] = cross_agent_data
         
         claim_store.update_claim(claim_id, state)

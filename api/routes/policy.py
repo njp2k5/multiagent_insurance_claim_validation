@@ -52,6 +52,11 @@ def check_policy(claim_id: str = Query(..., description="Claim ID whose Aadhaar 
                 "policy_expiry": None,
             },
         }
+        # Update state even on failure
+        state["policy_result"] = result
+        agent_results = state.setdefault("agent_results", [])
+        agent_results.append(result)
+        claim_store.update_claim(claim_id, state)
     else:
         policy_name = str(policy.policy_name)
         policy_expiry = policy.policy_expiry.isoformat() if isinstance(policy.policy_expiry, date) else None
