@@ -160,6 +160,15 @@ interface ClaimContextValue {
 }
 
 const STORAGE_KEY = "claim_state";
+const SESSION_ALIVE_KEY = "claim_session_alive";
+
+// On every fresh page load (refresh / new tab), clear stale claim state.
+// sessionStorage is cleared when the tab closes, so if the marker is missing
+// it means this is a fresh session → flush the old claim data.
+if (!sessionStorage.getItem(SESSION_ALIVE_KEY)) {
+  localStorage.removeItem(STORAGE_KEY);
+  sessionStorage.setItem(SESSION_ALIVE_KEY, "1");
+}
 
 // Module-level variable to prevent duplicate create-claim calls (survives HMR/remounts)
 let createClaimInFlight: Promise<string> | null = null;
