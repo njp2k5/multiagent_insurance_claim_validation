@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useClaim } from "@/contexts/ClaimContext";
 import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 import ClaimLayout from "@/components/ClaimLayout";
+import { terminalLog } from "@/lib/terminalLog";
 
 type ClaimType = "health" | "vehicle" | "property" | "life";
 
@@ -19,6 +20,7 @@ const ClaimDetails = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    terminalLog("ClaimDetails", "Mounted — claim_id:", state.claimId);
     if (!state.claimantType) {
       navigate("/claim/start", { replace: true });
     } else if (!state.claimType) {
@@ -32,7 +34,7 @@ const ClaimDetails = () => {
       case "health":
         return {
           patient_name: "",
-          patient_age: 0,
+          patient_age: "",
           patient_relation: "",
           hospital_name: "",
           hospital_location: "",
@@ -41,8 +43,8 @@ const ClaimDetails = () => {
           diagnosis: "",
           treatment_type: "",
           treatment_description: "",
-          total_bill_amount: 0,
-          amount_claimed: 0,
+          total_bill_amount: "",
+          amount_claimed: "",
           pre_existing_condition: false,
         } as const;
       case "vehicle":
@@ -51,12 +53,12 @@ const ClaimDetails = () => {
           vehicle_registration: "",
           vehicle_make: "",
           vehicle_model: "",
-          vehicle_year: new Date().getFullYear(),
+          vehicle_year: "",
           accident_date: today,
           accident_location: "",
           accident_description: "",
           damage_type: "",
-          estimated_repair_cost: 0,
+          estimated_repair_cost: "",
           police_report_filed: false,
           third_party_involved: false,
         } as const;
@@ -64,14 +66,14 @@ const ClaimDetails = () => {
         return {
           property_type: "",
           property_address: "",
-          property_value: 0,
+          property_value: "",
           ownership_type: "",
           incident_date: today,
           incident_type: "",
           incident_description: "",
           damage_description: "",
-          estimated_loss: 0,
-          amount_claimed: 0,
+          estimated_loss: "",
+          amount_claimed: "",
           police_report_filed: false,
           fire_brigade_report: false,
         } as const;
@@ -85,8 +87,8 @@ const ClaimDetails = () => {
           event_date: today,
           event_description: "",
           cause_of_event: "",
-          sum_assured: 0,
-          amount_claimed: 0,
+          sum_assured: "",
+          amount_claimed: "",
           death_certificate_available: false,
           medical_records_available: false,
         } as const;
@@ -109,11 +111,22 @@ const ClaimDetails = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    terminalLog("ClaimDetails", "Submitting — claim_id:", state.claimId);
     setIsSubmitting(true);
     setError(null);
     try {
+      const numberFields = [
+        "patient_age", "total_bill_amount", "amount_claimed", "vehicle_year", 
+        "estimated_repair_cost", "property_value", "estimated_loss", "sum_assured"
+      ];
+      const processedForm = { ...form };
+      numberFields.forEach(key => {
+        if (processedForm[key] !== undefined) {
+          processedForm[key] = processedForm[key] === "" ? 0 : Number(processedForm[key].replace(/,/g, "")) || 0;
+        }
+      });
       await submitClaimDetails(
-        { ...form, claim_id: state.claimId!, claimant_type: state.claimantType },
+        { ...processedForm, claim_id: state.claimId!, claimant_type: state.claimantType },
         state.claimType as ClaimType
       );
       navigate("/claim/id-verify");
@@ -132,9 +145,9 @@ const ClaimDetails = () => {
         </Label>
         <Input
           id={key}
-          type="number"
+          type="text"
           value={form[key] ?? ""}
-          onChange={(e) => handleChange(key, Number(e.target.value))}
+          onChange={(e) => handleChange(key, e.target.value)}
           className="h-11 bg-muted/30 border-border/60 focus:bg-white transition-colors"
         />
       </div>

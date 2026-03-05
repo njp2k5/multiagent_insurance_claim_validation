@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useClaim } from "@/contexts/ClaimContext";
 import { Heart, Car, Home, Users, Loader2 } from "lucide-react";
 import ClaimLayout from "@/components/ClaimLayout";
+import { terminalLog } from "@/lib/terminalLog";
 
 const claimTypes = [
   {
@@ -51,6 +52,7 @@ const ClaimType = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    terminalLog("ClaimType", "Mounted — claim_id:", state.claimId);
     if (!state.claimantType) {
       navigate("/claim/start", { replace: true });
       return;
@@ -59,6 +61,7 @@ const ClaimType = () => {
   }, [ensureClaimId, navigate, state.claimantType]);
 
   const handleSelect = async (type: "health" | "vehicle" | "property" | "life") => {
+    terminalLog("ClaimType", "Selected:", type, "— claim_id:", state.claimId);
     setIsSubmitting(true);
     setError(null);
     try {

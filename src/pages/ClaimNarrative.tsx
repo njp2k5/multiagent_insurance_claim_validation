@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useClaim } from "@/contexts/ClaimContext";
 import { ArrowLeft, ArrowRight, MessageSquare } from "lucide-react";
 import ClaimLayout from "@/components/ClaimLayout";
+import { terminalLog } from "@/lib/terminalLog";
 
 const ClaimNarrative = () => {
   const { state, saveNarrative } = useClaim();
@@ -15,6 +16,7 @@ const ClaimNarrative = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    terminalLog("ClaimNarrative", "Mounted — claim_id:", state.claimId);
     if (!state.claimantType) navigate("/claim/start", { replace: true });
     else if (!state.claimType) navigate("/claim/type", { replace: true });
     else if (!state.details) navigate("/claim/details", { replace: true });
@@ -23,6 +25,7 @@ const ClaimNarrative = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    terminalLog("ClaimNarrative", "Saving narrative — claim_id:", state.claimId);
     if (!story.trim()) {
       setError("Please provide a brief account of what happened.");
       return;

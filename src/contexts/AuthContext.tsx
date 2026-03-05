@@ -3,6 +3,8 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 interface AuthUser {
   email: string;
   accessToken: string;
+  username: string;
+  password: string;
 }
 
 interface AuthContextType {
@@ -26,7 +28,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const stored = localStorage.getItem("auth_user");
     if (stored) {
       try {
-        setUser(JSON.parse(stored));
+        const parsedUser = JSON.parse(stored) as AuthUser;
+        // Ensure the stored user has the required fields for Basic Auth
+        if (parsedUser.username && parsedUser.password) {
+          setUser(parsedUser);
+        } else {
+          // Old format without username/password, clear it to force re-login
+          localStorage.removeItem("auth_user");
+        }
       } catch {
         localStorage.removeItem("auth_user");
       }
@@ -65,6 +74,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const authUser: AuthUser = {
       email: data.email,
       accessToken: data.access_token,
+      username,
+      password,
     };
     setUser(authUser);
     localStorage.setItem("auth_user", JSON.stringify(authUser));

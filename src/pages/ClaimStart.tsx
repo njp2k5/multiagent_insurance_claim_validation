@@ -1,22 +1,33 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { useClaim } from "@/contexts/ClaimContext";
 import { User, Building2, Loader2 } from "lucide-react";
 import ClaimLayout from "@/components/ClaimLayout";
+import { terminalLog } from "@/lib/terminalLog";
 
 const ClaimStart = () => {
-  const { ensureClaimId, setClaimantType } = useClaim();
+  const { startNewClaim, setClaimantType } = useClaim();
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const hasInitialized = useRef(false);
 
   useEffect(() => {
+    // Ensure we only run once per component lifetime
+    if (hasInitialized.current) {
+      terminalLog("ClaimStart", "Already initialized, skipping");
+      return;
+    }
+    hasInitialized.current = true;
+    terminalLog("ClaimStart", "Initializing claim...");
+
     const init = async () => {
       setIsCreating(true);
       setError(null);
       try {
-        await ensureClaimId();
+        const claimId = await startNewClaim();
+        terminalLog("ClaimStart", "Initialized with claim_id:", claimId);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to start claim");
       } finally {
@@ -24,7 +35,8 @@ const ClaimStart = () => {
       }
     };
     void init();
-  }, [ensureClaimId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSelect = (type: "user" | "company") => {
     setClaimantType(type);

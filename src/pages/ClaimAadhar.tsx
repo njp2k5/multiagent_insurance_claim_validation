@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useClaim } from "@/contexts/ClaimContext";
 import { Upload, ArrowLeft, ArrowRight, Loader2, CheckCircle2, FileText, X } from "lucide-react";
 import ClaimLayout from "@/components/ClaimLayout";
+import { terminalLog } from "@/lib/terminalLog";
 
 const ClaimAadhar = () => {
   const { state, verifyAadhar } = useClaim();
@@ -17,6 +18,7 @@ const ClaimAadhar = () => {
   const [dragActive, setDragActive] = useState(false);
 
   useEffect(() => {
+    terminalLog("ClaimAadhar", "Mounted — claim_id:", state.claimId);
     if (!state.claimantType) navigate("/claim/start", { replace: true });
     else if (!state.claimType) navigate("/claim/type", { replace: true });
     else if (!state.details) navigate("/claim/details", { replace: true });
@@ -27,6 +29,7 @@ const ClaimAadhar = () => {
       setError("Please select an Aadhaar file to upload");
       return;
     }
+    terminalLog("ClaimAadhar", "Uploading Aadhaar — claim_id:", state.claimId);
     setIsSubmitting(true);
     setError(null);
     try {

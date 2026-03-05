@@ -21,6 +21,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import ClaimLayout from "@/components/ClaimLayout";
+import { terminalLog } from "@/lib/terminalLog";
 
 const docOptions = ["Medical report", "Prescription", "FIR", "Bills", "Other"];
 
@@ -45,6 +46,7 @@ const ClaimDocuments = () => {
   const chatInputRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
+    terminalLog("ClaimDocuments", "Mounted — claim_id:", state.claimId);
     if (!state.claimantType) navigate("/claim/start", { replace: true });
     else if (!state.claimType) navigate("/claim/type", { replace: true });
     else if (!state.details) navigate("/claim/details", { replace: true });
@@ -62,6 +64,7 @@ const ClaimDocuments = () => {
       setError("Please upload at least one document (max 2).");
       return;
     }
+    terminalLog("ClaimDocuments", "Uploading documents — claim_id:", state.claimId);
     setIsSubmitting(true);
     setError(null);
     try {
