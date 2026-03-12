@@ -1,0 +1,25 @@
+# Virtual environments
+venv/
+.env
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE/editor
+.vscode/
+.idea/
+*.swp
+
+# Databases / data files
+auth.db
+*.sqlite
+*.db
+
+# OS files
+.DS_Store
+Thumbs.db
+
+uploads/
