@@ -619,6 +619,6 @@ This project is open source and available under the [MIT License](LICENSE).
 
 <div align="center">
 
-**Built with ❤️ using AI-powered multi-agent architecture**
+
 
 </div>
